@@ -1,14 +1,10 @@
 /*
-  ESP32 Random Telemetry Data Sender
+  ESP32 Random Text & Telemetry Data Sender (Setiap 3 Detik)
   Proyek: ESP32 Monitoring System (Laragon + Express + Vue 3)
   
   Deskripsi:
   Program ini menghubungkan ESP32 ke jaringan Wi-Fi lokal dan mengirimkan
-  data sensor acak (simulasi) ke server backend melalui HTTP POST JSON.
-  
-  Perhatian:
-  - ESP32 dan komputer server HARUS terhubung ke jaringan Wi-Fi yang sama.
-  - Jangan gunakan "localhost" pada SERVER_URL. Gunakan IP lokal komputer Anda.
+  teks acak serta kode acak ke backend setiap 3 detik sekali via HTTP POST JSON.
 */
 
 #include <WiFi.h>
@@ -19,28 +15,47 @@ const char* WIFI_SSID     = "NAMA_WIFI_ANDA";       // Ganti dengan SSID Wi-Fi A
 const char* WIFI_PASSWORD = "PASSWORD_WIFI_ANDA";   // Ganti dengan Password Wi-Fi Anda
 
 // ================= KONFIGURASI SERVER =================
-// Ganti IP di bawah jika IP komputer Anda berubah (cek dengan 'ipconfig' di terminal)
+// Ganti IP jika IP komputer Anda berubah (cek dengan 'ipconfig' di terminal)
 const char* SERVER_URL    = "http://192.168.108.12:3000/api/data";
 const char* DEVICE_ID     = "esp32-node-01";
 
-// Interval pengiriman data (dalam milidetik: 5000 ms = 5 detik)
-const unsigned long SEND_INTERVAL_MS = 5000;
+// Interval pengiriman data: 3000 milidetik = 3 detik
+const unsigned long SEND_INTERVAL_MS = 3000;
 
-// Pin LED internal (opsional untuk indikator kedipan pengiriman)
+// Pin LED internal (indikator saat proses kirim)
 #if defined(LED_BUILTIN)
   const int LED_PIN = LED_BUILTIN;
 #else
-  const int LED_PIN = 2; // Default umum untuk banyak board ESP32
+  const int LED_PIN = 2; // Default pin LED di banyak board ESP32
 #endif
 
 // ================= VARIABEL GLOBAL =================
 unsigned long lastSendTime = 0;
 unsigned long packetCounter = 0;
 
-// Fungsi pembantu untuk menghasilkan angka desimal acak
-float getRandomFloat(float minVal, float maxVal) {
-  float randomRatio = (float)random(0, 10000) / 10000.0;
-  return minVal + (randomRatio * (maxVal - minVal));
+// Daftar teks / pesan acak
+const char* daftarPesan[] = {
+  "Sistem beroperasi normal",
+  "Kondisi lingkungan aman",
+  "Pendeteksian aktivitas zona 1",
+  "Sensor membaca getaran ringan",
+  "Pintu akses utama terkunci",
+  "Temperatur ruang optimal",
+  "Koneksi jaringan Wi-Fi lancar",
+  "Pembaruan status perangkat siap",
+  "Peringatan pergerakan terdeteksi",
+  "Baterai dalam kondisi prima"
+};
+const int totalPesan = sizeof(daftarPesan) / sizeof(daftarPesan[0]);
+
+// Fungsi membuat kode string teks acak (contoh: "TXT-7K2M")
+String generateRandomCode(int panjang) {
+  const char karakter[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  String hasil = "TXT-";
+  for (int i = 0; i < panjang; i++) {
+    hasil += karakter[random(0, sizeof(karakter) - 1)];
+  }
+  return hasil;
 }
 
 // Fungsi koneksi Wi-Fi
@@ -62,85 +77,74 @@ void connectWiFi() {
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println();
     Serial.println("[WiFi] Berhasil terhubung!");
-    Serial.print("[WiFi] IP Address ESP32: ");
+    Serial.print("[WiFi] IP ESP32: ");
     Serial.println(WiFi.localIP());
-    Serial.print("[WiFi] Signal (RSSI): ");
-    Serial.print(WiFi.RSSI());
-    Serial.println(" dBm");
   } else {
     Serial.println();
-    Serial.println("[WiFi] Gagal terhubung. Periksa SSID dan Password!");
+    Serial.println("[WiFi] Gagal terhubung! Periksa SSID & Password.");
   }
 }
 
-// Fungsi untuk mengirim data JSON ke backend
-void sendRandomTelemetry() {
+// Fungsi mengirim teks random ke backend setiap 3 detik
+void sendRandomText() {
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("[Peringatan] Wi-Fi terputus, mencoba menghubungkan kembali...");
+    Serial.println("[WiFi] Terputus, mencoba menghubungkan ulang...");
     WiFi.reconnect();
     return;
   }
 
-  // Nyalakan LED indikator saat proses pengiriman
+  // Nyalakan LED sesaat saat mengirim
   digitalWrite(LED_PIN, HIGH);
 
   packetCounter++;
 
-  // 1. Generate nilai data acak
-  float suhu = getRandomFloat(24.0, 34.0);        // Rentang 24.0 - 34.0 °C
-  float kelembaban = getRandomFloat(45.0, 85.0);  // Rentang 45.0 - 85.0 %
-  float tegangan = getRandomFloat(3.15, 3.35);    // Rentang 3.15 - 3.35 V
-  int sinyalWifi = WiFi.RSSI();
-
-  // Status acak
-  const char* statusList[] = {"normal", "optimal", "waspada"};
-  const char* status = statusList[random(0, 3)];
+  // 1. Ambil teks pesan acak dan kode teks acak
+  int indexAcak = random(0, totalPesan);
+  String teksPesan = daftarPesan[indexAcak];
+  String kodeAcak = generateRandomCode(4);
+  int nilaiAcak = random(10, 100);
 
   // 2. Susun format JSON string
-  // Payload mengikuti spesifikasi: { "device_id": "...", "data": { ... } }
   String jsonPayload = "{";
   jsonPayload += "\"device_id\":\"" + String(DEVICE_ID) + "\",";
   jsonPayload += "\"data\":{";
-  jsonPayload += "\"suhu\":" + String(suhu, 1) + ",";
-  jsonPayload += "\"kelembaban\":" + String(kelembaban, 1) + ",";
-  jsonPayload += "\"tegangan\":" + String(tegangan, 2) + ",";
+  jsonPayload += "\"pesan_teks\":\"" + teksPesan + "\",";
+  jsonPayload += "\"kode_acak\":\"" + kodeAcak + "\",";
+  jsonPayload += "\"nilai\":" + String(nilaiAcak) + ",";
   jsonPayload += "\"paket_ke\":" + String(packetCounter) + ",";
-  jsonPayload += "\"rssi_dbm\":" + String(sinyalWifi) + ",";
-  jsonPayload += "\"status\":\"" + String(status) + "\"";
+  jsonPayload += "\"rssi_dbm\":" + String(WiFi.RSSI());
   jsonPayload += "}";
   jsonPayload += "}";
 
   Serial.println("--------------------------------------------------");
-  Serial.print("[HTTP] Mengirim data ke: ");
-  Serial.println(SERVER_URL);
-  Serial.print("[HTTP] Payload: ");
+  Serial.print("[HTTP POST 3s] Paket ke #");
+  Serial.println(packetCounter);
+  Serial.print("[Payload] ");
   Serial.println(jsonPayload);
 
   // 3. Inisialisasi HTTPClient
   HTTPClient http;
   http.begin(SERVER_URL);
   http.addHeader("Content-Type", "application/json");
-  http.setTimeout(4000); // Batas waktu respons 4 detik
+  http.setTimeout(2500); // Batas respons 2.5 detik
 
-  // 4. Kirim request POST
+  // 4. Kirim data
   int httpResponseCode = http.POST(jsonPayload);
 
   if (httpResponseCode > 0) {
-    Serial.print("[HTTP] Kode Respons: ");
+    Serial.print("[Sukses] Kode HTTP: ");
     Serial.println(httpResponseCode);
-
     String responseBody = http.getString();
-    Serial.print("[HTTP] Respons Server: ");
+    Serial.print("[Server] ");
     Serial.println(responseBody);
   } else {
-    Serial.print("[HTTP] Pengiriman Gagal! Error: ");
+    Serial.print("[Error] Pengiriman gagal: ");
     Serial.println(http.errorToString(httpResponseCode).c_str());
-    Serial.println("[Tips] Pastikan server backend berjalan dan firewall mengizinkan port 3000.");
   }
 
   http.end();
 
-  // Matikan LED indikator
+  // Matikan LED
   digitalWrite(LED_PIN, LOW);
 }
 
@@ -151,13 +155,13 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
 
+  // Seed acak berdasarkan noise pin analog
+  randomSeed(analogRead(0) + micros());
+
   Serial.println();
   Serial.println("==================================================");
-  Serial.println("   ESP32 Monitoring System - Random Sender        ");
+  Serial.println("   ESP32 Auto Sender (Setiap 3 Detik Teks Acak)   ");
   Serial.println("==================================================");
-
-  // Inisialisasi seed angka acak
-  randomSeed(analogRead(0) + micros());
 
   connectWiFi();
 }
@@ -165,9 +169,9 @@ void setup() {
 void loop() {
   unsigned long currentMillis = millis();
 
-  // Kirim data setiap interval yang ditentukan
+  // Logic: kirim data persis setiap 3000 ms (3 detik)
   if (currentMillis - lastSendTime >= SEND_INTERVAL_MS) {
     lastSendTime = currentMillis;
-    sendRandomTelemetry();
+    sendRandomText();
   }
 }

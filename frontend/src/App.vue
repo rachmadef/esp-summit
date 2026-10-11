@@ -20,8 +20,8 @@ const totalPages = ref(1);
 const filterDeviceId = ref('');
 const errorMessage = ref('');
 
-// Auto Refresh Timer
-const refreshIntervalSec = ref(5);
+// Auto Refresh Timer (disesuaikan dengan interval ESP32: 3 detik)
+const refreshIntervalSec = ref(3);
 let timerId = null;
 
 // Modal Detail JSON
@@ -39,7 +39,7 @@ const simulatorPayloadText = ref(JSON.stringify({
 }, null, 2));
 const simulatorStatus = ref({ loading: false, success: null, message: '' });
 
-// Salin status copy
+// Status salin JSON
 const isCopied = ref(false);
 
 // Perangkat Unik dari data yang dimuat
@@ -257,85 +257,88 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="dashboard-wrapper">
-    <!-- Navbar / Header -->
-    <header class="navbar">
-      <div class="navbar-left">
-        <div class="brand-logo">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path>
-          </svg>
-        </div>
-        <div>
-          <h1 class="navbar-title">ESP32 Monitoring Dashboard</h1>
-          <p class="navbar-subtitle">Node.js Express &bull; MySQL Laragon &bull; Vue.js 3</p>
-        </div>
-      </div>
-
-      <div class="navbar-right">
-        <!-- Status Badges -->
-        <div class="status-indicators">
-          <span class="status-pill" :class="healthStatus.status === 'healthy' ? 'pill-online' : 'pill-offline'">
-            <span class="dot"></span>
-            API: {{ healthStatus.status === 'healthy' ? 'Online' : 'Offline' }}
-          </span>
-
-          <span class="status-pill" :class="healthStatus.database === 'connected' ? 'pill-online' : 'pill-offline'">
-            <span class="dot"></span>
-            DB: {{ healthStatus.database === 'connected' ? 'Terhubung' : 'Terputus' }}
-          </span>
+  <div class="app-container">
+    <!-- Top Navbar -->
+    <header class="top-nav">
+      <div class="nav-content">
+        <div class="nav-brand">
+          <div class="brand-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path>
+            </svg>
+          </div>
+          <div>
+            <h1 class="brand-title">ESP32 Monitoring</h1>
+            <p class="brand-sub">Laragon &bull; Express &bull; Vue 3</p>
+          </div>
         </div>
 
-        <!-- Auto Refresh Selector -->
-        <div class="refresh-control">
-          <label for="auto-refresh-select" class="control-label">Auto-refresh:</label>
-          <select id="auto-refresh-select" v-model="refreshIntervalSec" class="select-input">
-            <option :value="0">Nonaktif</option>
-            <option :value="3">3 Detik</option>
-            <option :value="5">5 Detik</option>
-            <option :value="10">10 Detik</option>
-            <option :value="30">30 Detik</option>
-          </select>
+        <div class="nav-actions">
+          <!-- Connection Status Pills -->
+          <div class="status-group">
+            <span class="status-pill" :class="healthStatus.status === 'healthy' ? 'pill-success' : 'pill-danger'">
+              <span class="status-dot"></span>
+              API: {{ healthStatus.status === 'healthy' ? 'Online' : 'Offline' }}
+            </span>
+
+            <span class="status-pill" :class="healthStatus.database === 'connected' ? 'pill-success' : 'pill-danger'">
+              <span class="status-dot"></span>
+              DB: {{ healthStatus.database === 'connected' ? 'Terhubung' : 'Terputus' }}
+            </span>
+          </div>
+
+          <!-- Auto Refresh Selector -->
+          <div class="action-item">
+            <label for="auto-refresh-select" class="form-label-inline">Auto-refresh:</label>
+            <select id="auto-refresh-select" v-model="refreshIntervalSec" class="form-select">
+              <option :value="0">Mati</option>
+              <option :value="3">3 Detik</option>
+              <option :value="5">5 Detik</option>
+              <option :value="10">10 Detik</option>
+              <option :value="30">30 Detik</option>
+            </select>
+          </div>
+
+          <!-- Refresh Button -->
+          <button id="btn-refresh" class="btn btn-default" @click="refreshAll" :disabled="isLoadingData" title="Segarkan Data">
+            <svg :class="{ 'spin-anim': isLoadingData }" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            Segarkan
+          </button>
+
+          <!-- Simulator Trigger Button -->
+          <button id="btn-open-simulator" class="btn btn-primary" @click="showSimulatorModal = true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            Simulator ESP32
+          </button>
         </div>
-
-        <!-- Action Buttons -->
-        <button id="btn-refresh" class="btn btn-secondary" @click="refreshAll" :disabled="isLoadingData">
-          <svg :class="{ 'spin-icon': isLoadingData }" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="23 4 23 10 17 10"></polyline>
-            <polyline points="1 20 1 14 7 14"></polyline>
-            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-          </svg>
-          Segarkan
-        </button>
-
-        <button id="btn-open-simulator" class="btn btn-primary" @click="showSimulatorModal = true">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polygon points="5 3 19 12 5 21 5 3"></polygon>
-          </svg>
-          Simulator ESP32
-        </button>
       </div>
     </header>
 
-    <!-- Main Container -->
-    <main class="main-content">
-      <!-- Error Banner -->
-      <div v-if="errorMessage" class="alert-box alert-error">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <!-- Main Content Area -->
+    <main class="page-body">
+      <!-- Error Alert -->
+      <div v-if="errorMessage" class="notice notice-danger">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="10"></circle>
           <line x1="12" y1="8" x2="12" y2="12"></line>
           <line x1="12" y1="16" x2="12.01" y2="16"></line>
         </svg>
         <span>{{ errorMessage }}</span>
-        <button class="alert-close" @click="errorMessage = ''">&times;</button>
+        <button class="notice-dismiss" @click="errorMessage = ''">&times;</button>
       </div>
 
-      <!-- Stat Cards -->
-      <section class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-header">
-            <span class="stat-label">Total Data Tercatat</span>
-            <span class="stat-icon icon-cyan">
+      <!-- Stat Cards Grid -->
+      <section class="cards-grid">
+        <div class="metric-card">
+          <div class="metric-header">
+            <span class="metric-label">Total Data Masuk</span>
+            <span class="metric-icon icon-blue">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
                 <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
@@ -343,14 +346,14 @@ onUnmounted(() => {
               </svg>
             </span>
           </div>
-          <div class="stat-value">{{ totalRecords }}</div>
-          <div class="stat-footer">Tersimpan di tabel `esp32_data`</div>
+          <div class="metric-value">{{ totalRecords }}</div>
+          <div class="metric-caption">Tersimpan di database lokal</div>
         </div>
 
-        <div class="stat-card">
-          <div class="stat-header">
-            <span class="stat-label">Perangkat Aktif (Halaman Ini)</span>
-            <span class="stat-icon icon-emerald">
+        <div class="metric-card">
+          <div class="metric-header">
+            <span class="metric-label">Perangkat Aktif</span>
+            <span class="metric-icon icon-green">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
                 <rect x="9" y="9" width="6" height="6"></rect>
@@ -365,28 +368,28 @@ onUnmounted(() => {
               </svg>
             </span>
           </div>
-          <div class="stat-value">{{ uniqueDevicesCount }}</div>
-          <div class="stat-footer">Device ID berbeda</div>
+          <div class="metric-value">{{ uniqueDevicesCount }}</div>
+          <div class="metric-caption">ID perangkat unik di tabel</div>
         </div>
 
-        <div class="stat-card">
-          <div class="stat-header">
-            <span class="stat-label">Waktu Data Terakhir</span>
-            <span class="stat-icon icon-indigo">
+        <div class="metric-card">
+          <div class="metric-header">
+            <span class="metric-label">Data Terakhir</span>
+            <span class="metric-icon icon-purple">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="10"></circle>
                 <polyline points="12 6 12 12 16 14"></polyline>
               </svg>
             </span>
           </div>
-          <div class="stat-value stat-value-sm">{{ latestRecordTime }}</div>
-          <div class="stat-footer">Terakhir diterima server</div>
+          <div class="metric-value metric-value-sm">{{ latestRecordTime }}</div>
+          <div class="metric-caption">Waktu diterima server</div>
         </div>
 
-        <div class="stat-card">
-          <div class="stat-header">
-            <span class="stat-label">Info Jaringan ESP32</span>
-            <span class="stat-icon icon-amber">
+        <div class="metric-card">
+          <div class="metric-header">
+            <span class="metric-label">Info Endpoint ESP32</span>
+            <span class="metric-icon icon-amber">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
                 <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
@@ -395,42 +398,43 @@ onUnmounted(() => {
               </svg>
             </span>
           </div>
-          <div class="stat-value stat-value-sm code-font">PORT: 3000 / API: /api/data</div>
-          <div class="stat-footer">Gunakan IP Komputer (bukan localhost)</div>
+          <div class="metric-value metric-value-sm font-mono">:3000/api/data</div>
+          <div class="metric-caption">Gunakan IP Komputer di Wi-Fi</div>
         </div>
       </section>
 
-      <!-- Data Section with Filters -->
-      <section class="table-section">
-        <div class="section-toolbar">
-          <div class="toolbar-title-group">
-            <h2 class="section-title">Riwayat Telemetri Data</h2>
-            <span class="section-badge">Halaman {{ currentPage }} dari {{ totalPages }}</span>
+      <!-- Data Table Card -->
+      <section class="panel">
+        <!-- Panel Toolbar -->
+        <div class="panel-header">
+          <div class="panel-title-area">
+            <h2 class="panel-title">Riwayat Telemetri Data</h2>
+            <span class="panel-badge">Halaman {{ currentPage }} dari {{ totalPages }}</span>
           </div>
 
-          <div class="toolbar-controls">
-            <!-- Filter Form -->
-            <form class="search-form" @submit.prevent="handleFilterSubmit">
-              <div class="search-input-wrap">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <div class="panel-actions">
+            <!-- Filter by Device ID -->
+            <form class="filter-form" @submit.prevent="handleFilterSubmit">
+              <div class="input-with-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="11" cy="11" r="8"></circle>
                   <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                 </svg>
                 <input
                   v-model="filterDeviceId"
                   type="text"
-                  placeholder="Filter Device ID..."
-                  class="search-input"
+                  placeholder="Cari Device ID..."
+                  class="form-input"
                 />
               </div>
-              <button type="submit" class="btn btn-secondary btn-sm">Cari</button>
-              <button v-if="filterDeviceId" type="button" class="btn btn-ghost btn-sm" @click="resetFilter">Reset</button>
+              <button type="submit" class="btn btn-default btn-sm">Cari</button>
+              <button v-if="filterDeviceId" type="button" class="btn btn-link btn-sm" @click="resetFilter">Reset</button>
             </form>
 
-            <!-- Limit per Page -->
-            <div class="limit-select-wrap">
-              <label for="limit-select" class="control-label">Limit:</label>
-              <select id="limit-select" v-model="limitPerPage" @change="loadData" class="select-input select-sm">
+            <!-- Limit selector -->
+            <div class="limit-wrapper">
+              <label for="limit-select" class="form-label-inline">Limit:</label>
+              <select id="limit-select" v-model="limitPerPage" @change="loadData" class="form-select form-select-sm">
                 <option :value="10">10</option>
                 <option :value="20">20</option>
                 <option :value="50">50</option>
@@ -439,39 +443,39 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- Table Container -->
-        <div class="table-card">
-          <div v-if="isLoadingData" class="table-loader">
+        <!-- Table View -->
+        <div class="panel-body">
+          <div v-if="isLoadingData" class="state-box">
             <div class="spinner"></div>
-            <span>Memuat data telemetri...</span>
+            <p>Memuat data...</p>
           </div>
 
-          <div v-else-if="dataList.length === 0" class="empty-state">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <div v-else-if="dataList.length === 0" class="state-box">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5">
               <circle cx="12" cy="12" r="10"></circle>
               <line x1="8" y1="12" x2="16" y2="12"></line>
             </svg>
             <h3>Belum Ada Data</h3>
-            <p>Belum ada data ESP32 yang tersimpan di database. Anda dapat mengirimkan data dari perangkat fisik atau mencoba dengan simulator.</p>
-            <button class="btn btn-primary btn-sm" @click="showSimulatorModal = true">Kirim Data Contoh</button>
+            <p>Tabel masih kosong. Tunggu ESP32 mengirim data atau gunakan simulator untuk uji coba.</p>
+            <button class="btn btn-primary btn-sm" @click="showSimulatorModal = true">Kirim Data Uji Coba</button>
           </div>
 
-          <div v-else class="table-responsive">
-            <table class="data-table">
+          <div v-else class="table-container">
+            <table class="clean-table">
               <thead>
                 <tr>
-                  <th style="width: 80px;">ID</th>
-                  <th style="width: 180px;">Device ID</th>
-                  <th>Payload JSON Data</th>
-                  <th style="width: 220px;">Waktu Diterima</th>
-                  <th style="width: 110px; text-align: center;">Aksi</th>
+                  <th style="width: 70px;">ID</th>
+                  <th style="width: 170px;">Device ID</th>
+                  <th>Payload Data (JSON)</th>
+                  <th style="width: 210px;">Waktu Diterima</th>
+                  <th style="width: 90px; text-align: right;">Aksi</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="item in dataList" :key="item.id">
-                  <td class="code-font text-muted">#{{ item.id }}</td>
+                  <td class="font-mono text-muted">#{{ item.id }}</td>
                   <td>
-                    <span class="device-badge">
+                    <span class="device-tag">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="2"></circle>
                         <path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"></path>
@@ -480,17 +484,18 @@ onUnmounted(() => {
                     </span>
                   </td>
                   <td>
-                    <div class="json-preview-container">
-                      <span v-for="(val, key) in item.data_json" :key="key" class="json-tag">
-                        <strong>{{ key }}:</strong> {{ typeof val === 'object' ? JSON.stringify(val) : val }}
+                    <div class="json-tags-row">
+                      <span v-for="(val, key) in item.data_json" :key="key" class="json-chip">
+                        <span class="chip-key">{{ key }}:</span>
+                        <span class="chip-val">{{ typeof val === 'object' ? JSON.stringify(val) : val }}</span>
                       </span>
                     </div>
                   </td>
-                  <td class="text-muted font-sm">
+                  <td class="text-muted text-sm">
                     {{ formatDate(item.received_at) }}
                   </td>
-                  <td style="text-align: center;">
-                    <button class="btn btn-ghost btn-sm" @click="openDetail(item)" title="Lihat detail JSON">
+                  <td style="text-align: right;">
+                    <button class="btn btn-link btn-sm" @click="openDetail(item)">
                       Detail
                     </button>
                   </td>
@@ -500,24 +505,24 @@ onUnmounted(() => {
           </div>
 
           <!-- Pagination Footer -->
-          <div v-if="totalPages > 1" class="pagination-bar">
-            <div class="pagination-info">
-              Menampilkan {{ dataList.length }} dari {{ totalRecords }} total rekaman
-            </div>
-            <div class="pagination-controls">
+          <div v-if="totalPages > 1" class="pagination-footer">
+            <span class="pagination-text">
+              Menampilkan {{ dataList.length }} dari {{ totalRecords }} rekaman
+            </span>
+            <div class="pagination-buttons">
               <button
-                class="btn btn-ghost btn-sm"
+                class="btn btn-default btn-xs"
                 :disabled="currentPage <= 1"
                 @click="goToPage(currentPage - 1)"
               >
                 &larr; Sebelumnya
               </button>
 
-              <div class="page-numbers">
+              <div class="page-pills">
                 <button
                   v-for="p in totalPages"
                   :key="p"
-                  class="page-number-btn"
+                  class="page-pill"
                   :class="{ active: p === currentPage }"
                   @click="goToPage(p)"
                 >
@@ -526,7 +531,7 @@ onUnmounted(() => {
               </div>
 
               <button
-                class="btn btn-ghost btn-sm"
+                class="btn btn-default btn-xs"
                 :disabled="currentPage >= totalPages"
                 @click="goToPage(currentPage + 1)"
               >
@@ -539,106 +544,102 @@ onUnmounted(() => {
     </main>
 
     <!-- Modal Detail Record -->
-    <div v-if="showDetailModal && selectedRecord" class="modal-backdrop" @click.self="closeDetail">
-      <div class="modal-card">
-        <div class="modal-header">
-          <div class="modal-title-group">
-            <h3>Detail Record #{{ selectedRecord.id }}</h3>
-            <span class="device-badge">{{ selectedRecord.device_id }}</span>
+    <div v-if="showDetailModal && selectedRecord" class="modal-overlay" @click.self="closeDetail">
+      <div class="modal-box">
+        <div class="modal-box-header">
+          <div class="modal-title-wrap">
+            <h3 class="modal-title">Detail Data #{{ selectedRecord.id }}</h3>
+            <span class="device-tag">{{ selectedRecord.device_id }}</span>
           </div>
-          <button class="modal-close" @click="closeDetail">&times;</button>
+          <button class="modal-close-btn" @click="closeDetail">&times;</button>
         </div>
 
-        <div class="modal-body">
-          <div class="meta-row">
-            <div>
-              <span class="meta-label">Waktu Diterima:</span>
-              <span class="meta-value">{{ formatDate(selectedRecord.received_at) }}</span>
-            </div>
-            <button class="btn btn-secondary btn-sm" @click="copyJsonToClipboard(selectedRecord.data_json)">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <div class="modal-box-body">
+          <div class="modal-meta-row">
+            <span class="text-muted text-sm">Waktu: {{ formatDate(selectedRecord.received_at) }}</span>
+            <button class="btn btn-default btn-xs" @click="copyJsonToClipboard(selectedRecord.data_json)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
               </svg>
-              {{ isCopied ? 'Tersalin!' : 'Salin JSON' }}
+              {{ isCopied ? 'Tersalin' : 'Salin JSON' }}
             </button>
           </div>
 
-          <div class="json-code-box">
+          <div class="code-view">
             <pre><code>{{ JSON.stringify(selectedRecord.data_json, null, 2) }}</code></pre>
           </div>
         </div>
 
-        <div class="modal-footer">
-          <button class="btn btn-secondary" @click="closeDetail">Tutup</button>
+        <div class="modal-box-footer">
+          <button class="btn btn-default" @click="closeDetail">Tutup</button>
         </div>
       </div>
     </div>
 
     <!-- Modal Simulator ESP32 -->
-    <div v-if="showSimulatorModal" class="modal-backdrop" @click.self="showSimulatorModal = false">
-      <div class="modal-card">
-        <div class="modal-header">
+    <div v-if="showSimulatorModal" class="modal-overlay" @click.self="showSimulatorModal = false">
+      <div class="modal-box">
+        <div class="modal-box-header">
           <div>
-            <h3>Simulator Pengiriman Data ESP32</h3>
-            <p class="modal-subtitle">Menguji endpoint POST /api/data tanpa perangkat fisik</p>
+            <h3 class="modal-title">Simulator ESP32</h3>
+            <p class="modal-desc">Kirim payload JSON untuk menguji penerimaan data</p>
           </div>
-          <button class="modal-close" @click="showSimulatorModal = false">&times;</button>
+          <button class="modal-close-btn" @click="showSimulatorModal = false">&times;</button>
         </div>
 
-        <div class="modal-body">
+        <div class="modal-box-body">
           <!-- Template selector -->
-          <div class="form-group">
-            <label class="form-label">Gunakan Template Contoh:</label>
-            <div class="template-buttons">
-              <button type="button" class="btn btn-ghost btn-xs" @click="setSimulatorTemplate('suhu')">Suhu & Kelembaban</button>
-              <button type="button" class="btn btn-ghost btn-xs" @click="setSimulatorTemplate('tegangan')">Baterai & Tegangan</button>
-              <button type="button" class="btn btn-ghost btn-xs" @click="setSimulatorTemplate('gerakan')">Sensor Gerak/PIR</button>
+          <div class="form-row">
+            <label class="form-label">Template Contoh:</label>
+            <div class="template-chips">
+              <button type="button" class="btn btn-default btn-xs" @click="setSimulatorTemplate('suhu')">Suhu & Kelembaban</button>
+              <button type="button" class="btn btn-default btn-xs" @click="setSimulatorTemplate('tegangan')">Baterai & Tegangan</button>
+              <button type="button" class="btn btn-default btn-xs" @click="setSimulatorTemplate('gerakan')">Sensor PIR</button>
             </div>
           </div>
 
-          <!-- Device ID Input -->
-          <div class="form-group">
-            <label for="sim-device-id" class="form-label">Device ID:</label>
+          <!-- Device ID -->
+          <div class="form-row">
+            <label for="sim-device" class="form-label">Device ID:</label>
             <input
-              id="sim-device-id"
+              id="sim-device"
               v-model="simulatorDeviceId"
               type="text"
               class="form-input"
-              placeholder="Contoh: esp32-01"
+              placeholder="Contoh: esp32-ruang-utama"
             />
           </div>
 
-          <!-- Payload Textarea -->
-          <div class="form-group">
-            <label for="sim-payload" class="form-label">Payload JSON (Objek):</label>
+          <!-- JSON Payload -->
+          <div class="form-row">
+            <label for="sim-data" class="form-label">Data JSON (Objek):</label>
             <textarea
-              id="sim-payload"
+              id="sim-data"
               v-model="simulatorPayloadText"
-              rows="7"
-              class="form-textarea code-font"
-              placeholder="{\n  &quot;kunci&quot;: &quot;nilai&quot;\n}"
+              rows="6"
+              class="form-textarea font-mono"
             ></textarea>
           </div>
 
-          <!-- Status / Feedback -->
-          <div v-if="simulatorStatus.message" class="alert-box" :class="simulatorStatus.success ? 'alert-success' : 'alert-error'">
+          <!-- Feedback message -->
+          <div v-if="simulatorStatus.message" class="notice" :class="simulatorStatus.success ? 'notice-success' : 'notice-danger'">
             {{ simulatorStatus.message }}
           </div>
         </div>
 
-        <div class="modal-footer">
-          <button class="btn btn-secondary" @click="showSimulatorModal = false">Batal</button>
+        <div class="modal-box-footer">
+          <button class="btn btn-default" @click="showSimulatorModal = false">Batal</button>
           <button
             class="btn btn-primary"
             :disabled="simulatorStatus.loading || !simulatorDeviceId"
             @click="submitSimulator"
           >
-            <svg v-if="simulatorStatus.loading" class="spin-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg v-if="simulatorStatus.loading" class="spin-anim" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="12" y1="2" x2="12" y2="6"></line>
               <line x1="12" y1="18" x2="12" y2="22"></line>
             </svg>
-            {{ simulatorStatus.loading ? 'Mengirim...' : 'Kirim Payload' }}
+            {{ simulatorStatus.loading ? 'Mengirim...' : 'Kirim Data' }}
           </button>
         </div>
       </div>
@@ -647,206 +648,224 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* Reset & Base Token */
-:root {
-  --bg-dark: #0b0f19;
-  --bg-card: #111827;
-  --bg-card-subtle: #1f2937;
-  --border-color: rgba(255, 255, 255, 0.08);
-  --text-main: #f9fafb;
-  --text-muted: #9ca3af;
-  --accent-primary: #3b82f6;
-  --accent-primary-hover: #2563eb;
-  --accent-emerald: #10b981;
-  --accent-rose: #f43f5e;
-  --accent-amber: #f59e0b;
-  --accent-cyan: #06b6d4;
-  --accent-indigo: #6366f1;
-}
-
-.dashboard-wrapper {
+/* -------------------------------------------------------------
+   LIGHT MODE DESIGN SYSTEM - CLEAN & MINIMALIST
+------------------------------------------------------------- */
+.app-container {
   min-height: 100vh;
-  background: radial-gradient(circle at 10% 20%, #0f172a 0%, #030712 100%);
-  color: #f3f4f6;
+  background-color: #f8fafc; /* Slate 50 */
+  color: #0f172a;            /* Slate 900 */
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  padding: 0;
-  margin: 0;
-  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* Navbar */
-.navbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 2rem;
-  background: rgba(17, 24, 39, 0.75);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+.top-nav {
+  background-color: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
   position: sticky;
   top: 0;
-  z-index: 50;
+  z-index: 40;
+}
+
+.nav-content {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0.85rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   flex-wrap: wrap;
   gap: 1rem;
 }
 
-.navbar-left {
+.nav-brand {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
+  gap: 0.75rem;
 }
 
-.brand-logo {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #2563eb, #38bdf8);
+.brand-icon {
+  width: 36px;
+  height: 36px;
+  background-color: #2563eb;
+  color: #ffffff;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
 }
 
-.navbar-title {
-  font-size: 1.15rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+.brand-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #0f172a;
   margin: 0;
-  color: #ffffff;
+  line-height: 1.2;
 }
 
-.navbar-subtitle {
+.brand-sub {
   font-size: 0.75rem;
-  color: #94a3b8;
+  color: #64748b;
   margin: 0.15rem 0 0 0;
 }
 
-.navbar-right {
+.nav-actions {
   display: flex;
   align-items: center;
   gap: 0.75rem;
   flex-wrap: wrap;
 }
 
-/* Status Indicators */
-.status-indicators {
+/* Status Pills */
+.status-group {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.35rem 0.65rem;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
   border-radius: 9999px;
   font-size: 0.75rem;
-  font-weight: 600;
-  border: 1px solid transparent;
+  font-weight: 500;
 }
 
-.pill-online {
-  background: rgba(16, 185, 129, 0.12);
-  color: #34d399;
-  border-color: rgba(16, 185, 129, 0.25);
+.pill-success {
+  background-color: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
 }
 
-.pill-offline {
-  background: rgba(244, 63, 94, 0.12);
-  color: #fb7185;
-  border-color: rgba(244, 63, 94, 0.25);
+.pill-danger {
+  background-color: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
 }
 
-.dot {
+.status-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: currentColor;
+  background-color: currentColor;
 }
 
-/* Refresh Control */
-.refresh-control {
+.action-item {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
 }
 
-.control-label {
-  font-size: 0.78rem;
-  color: #94a3b8;
+.form-label-inline {
+  font-size: 0.8rem;
+  color: #64748b;
 }
 
-.select-input {
-  background: #1e293b;
-  color: #f1f5f9;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+/* Form Controls */
+.form-select {
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
   padding: 0.4rem 0.6rem;
   border-radius: 6px;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   outline: none;
   cursor: pointer;
+  transition: border-color 0.15s ease;
 }
 
-.select-sm {
+.form-select:focus {
+  border-color: #2563eb;
+}
+
+.form-select-sm {
   padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
+  font-size: 0.78rem;
+}
+
+.form-input {
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+  padding: 0.4rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.form-input:focus, .form-textarea:focus {
+  border-color: #2563eb;
+}
+
+.form-textarea {
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+  padding: 0.6rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* Buttons */
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.5rem 0.85rem;
+  gap: 0.4rem;
+  padding: 0.45rem 0.8rem;
   border-radius: 6px;
   font-size: 0.82rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   border: 1px solid transparent;
 }
 
+.btn-default {
+  background-color: #ffffff;
+  color: #334155;
+  border-color: #cbd5e1;
+}
+
+.btn-default:hover:not(:disabled) {
+  background-color: #f1f5f9;
+  border-color: #94a3b8;
+}
+
 .btn-primary {
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  background-color: #2563eb;
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #1d4ed8, #1e40af);
+  background-color: #1d4ed8;
 }
 
-.btn-secondary {
-  background: #1e293b;
-  color: #e2e8f0;
-  border-color: rgba(255, 255, 255, 0.12);
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: #334155;
-}
-
-.btn-ghost {
+.btn-link {
   background: transparent;
-  color: #94a3b8;
+  color: #2563eb;
+  border: none;
+  padding: 0.2rem 0.4rem;
 }
 
-.btn-ghost:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.06);
-  color: #ffffff;
+.btn-link:hover {
+  text-decoration: underline;
 }
 
 .btn-sm {
-  padding: 0.3rem 0.6rem;
+  padding: 0.35rem 0.65rem;
   font-size: 0.78rem;
 }
 
 .btn-xs {
   padding: 0.25rem 0.5rem;
-  font-size: 0.72rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.75rem;
 }
 
 .btn:disabled {
@@ -854,47 +873,39 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
-.spin-icon {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  100% { transform: rotate(360deg); }
-}
-
-/* Main Content */
-.main-content {
-  max-width: 1320px;
+/* Page Body */
+.page-body {
+  max-width: 1280px;
   margin: 0 auto;
-  padding: 1.75rem 2rem 3rem 2rem;
+  padding: 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
 }
 
-/* Alert Box */
-.alert-box {
+/* Notice / Alert */
+.notice {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.85rem 1.25rem;
+  gap: 0.65rem;
+  padding: 0.75rem 1rem;
   border-radius: 8px;
   font-size: 0.85rem;
 }
 
-.alert-error {
-  background: rgba(244, 63, 94, 0.1);
-  border: 1px solid rgba(244, 63, 94, 0.3);
-  color: #fda4af;
+.notice-danger {
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
 }
 
-.alert-success {
-  background: rgba(16, 185, 129, 0.1);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  color: #6ee7b7;
+.notice-success {
+  background-color: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #047857;
 }
 
-.alert-close {
+.notice-dismiss {
   margin-left: auto;
   background: none;
   border: none;
@@ -903,539 +914,482 @@ onUnmounted(() => {
   cursor: pointer;
 }
 
-/* Stats Grid */
-.stats-grid {
+/* Cards Grid */
+.cards-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 1.25rem;
+  gap: 1rem;
 }
 
-.stat-card {
-  background: rgba(30, 41, 59, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 1.25rem;
-  backdrop-filter: blur(8px);
+.metric-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1.15rem;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  transition: transform 0.2s ease, border-color 0.2s ease;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
 }
 
-.stat-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(255, 255, 255, 0.16);
-}
-
-.stat-header {
+.metric-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.stat-label {
+.metric-label {
   font-size: 0.8rem;
-  color: #94a3b8;
+  color: #64748b;
   font-weight: 500;
 }
 
-.stat-icon {
+.metric-icon {
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.icon-cyan { background: rgba(6, 182, 212, 0.15); color: #22d3ee; }
-.icon-emerald { background: rgba(16, 185, 129, 0.15); color: #34d399; }
-.icon-indigo { background: rgba(99, 102, 241, 0.15); color: #818cf8; }
-.icon-amber { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+.icon-blue { background-color: #eff6ff; color: #2563eb; }
+.icon-green { background-color: #f0fdf4; color: #16a34a; }
+.icon-purple { background-color: #faf5ff; color: #7c3aed; }
+.icon-amber { background-color: #fffbeb; color: #d97706; }
 
-.stat-value {
-  font-size: 1.85rem;
+.metric-value {
+  font-size: 1.75rem;
   font-weight: 700;
-  color: #ffffff;
+  color: #0f172a;
 }
 
-.stat-value-sm {
+.metric-value-sm {
   font-size: 0.95rem;
   font-weight: 600;
-  word-break: break-all;
 }
 
-.stat-footer {
-  font-size: 0.72rem;
-  color: #64748b;
-}
-
-/* Table Section */
-.table-section {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.section-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 1rem;
-}
-
-.toolbar-title-group {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.section-title {
-  font-size: 1.15rem;
-  font-weight: 600;
-  color: #ffffff;
-  margin: 0;
-}
-
-.section-badge {
+.metric-caption {
   font-size: 0.75rem;
-  background: rgba(255, 255, 255, 0.08);
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
   color: #94a3b8;
 }
 
-.toolbar-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  flex-wrap: wrap;
-}
-
-.search-form {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.search-input-wrap {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: #1e293b;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  padding: 0.35rem 0.7rem;
-  border-radius: 6px;
-  color: #94a3b8;
-}
-
-.search-input {
-  background: transparent;
-  border: none;
-  outline: none;
-  color: #f1f5f9;
-  font-size: 0.82rem;
-  width: 170px;
-}
-
-.limit-select-wrap {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-/* Table Card */
-.table-card {
-  background: rgba(30, 41, 59, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  backdrop-filter: blur(8px);
+/* Panel */
+.panel {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.03);
   overflow: hidden;
 }
 
-.table-responsive {
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #e2e8f0;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+}
+
+.panel-title-area {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.panel-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0;
+}
+
+.panel-badge {
+  font-size: 0.75rem;
+  background-color: #f1f5f9;
+  color: #64748b;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.filter-form {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.input-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  color: #94a3b8;
+}
+
+.input-with-icon .form-input {
+  border: none;
+  padding: 0.2rem;
+  outline: none;
+  width: 150px;
+}
+
+.limit-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* Table */
+.table-container {
   overflow-x: auto;
 }
 
-.data-table {
+.clean-table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
-  font-size: 0.85rem;
+  font-size: 0.84rem;
 }
 
-.data-table th {
-  background: rgba(15, 23, 42, 0.65);
-  color: #94a3b8;
+.clean-table th {
+  background-color: #f8fafc;
+  color: #475569;
   font-weight: 600;
-  padding: 0.85rem 1.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 0.75rem;
+  font-size: 0.74rem;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid #e2e8f0;
 }
 
-.data-table td {
+.clean-table td {
   padding: 0.85rem 1.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  color: #e2e8f0;
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
 }
 
-.data-table tr:hover td {
-  background: rgba(255, 255, 255, 0.02);
+.clean-table tr:hover td {
+  background-color: #f8fafc;
 }
 
-.device-badge {
+.device-tag {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  background: rgba(59, 130, 246, 0.12);
-  color: #60a5fa;
-  padding: 0.25rem 0.55rem;
-  border-radius: 6px;
+  gap: 0.3rem;
+  background-color: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #dbeafe;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.78rem;
   font-weight: 500;
 }
 
-.json-preview-container {
+.json-tags-row {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
 }
 
-.json-tag {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 0.2rem 0.5rem;
+.json-chip {
+  background-color: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  padding: 0.15rem 0.45rem;
   border-radius: 4px;
   font-size: 0.75rem;
   font-family: 'JetBrains Mono', monospace;
-  color: #cbd5e1;
+  color: #334155;
 }
 
-.json-tag strong {
-  color: #38bdf8;
+.chip-key {
+  color: #0369a1;
+  font-weight: 600;
+  margin-right: 0.2rem;
 }
 
-.code-font {
+.chip-val {
+  color: #334155;
+}
+
+.font-mono {
   font-family: 'JetBrains Mono', monospace;
 }
 
 .text-muted {
-  color: #94a3b8;
+  color: #64748b;
 }
 
-.font-sm {
+.text-sm {
   font-size: 0.8rem;
 }
 
-.table-loader {
+/* State Box (Empty & Loading) */
+.state-box {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem;
-  padding: 4rem;
-  color: #94a3b8;
-}
-
-.spinner {
-  width: 28px;
-  height: 28px;
-  border: 3px solid rgba(255, 255, 255, 0.1);
-  border-top-color: #3b82f6;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 4rem 2rem;
+  padding: 3.5rem 1.5rem;
   text-align: center;
   color: #64748b;
   gap: 0.5rem;
 }
 
-.empty-state h3 {
-  color: #e2e8f0;
-  margin: 0.5rem 0 0 0;
+.state-box h3 {
+  color: #0f172a;
+  margin: 0.4rem 0 0 0;
+  font-size: 1rem;
 }
 
-.empty-state p {
-  max-width: 420px;
+.state-box p {
   font-size: 0.85rem;
-  margin: 0 0 1rem 0;
+  margin: 0 0 0.75rem 0;
+  max-width: 400px;
 }
 
-/* Pagination Bar */
-.pagination-bar {
+.spinner {
+  width: 26px;
+  height: 26px;
+  border: 2px solid #e2e8f0;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.spin-anim {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  100% { transform: rotate(360deg); }
+}
+
+/* Pagination */
+.pagination-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.85rem 1.25rem;
-  background: rgba(15, 23, 42, 0.4);
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 0.75rem 1.25rem;
+  background-color: #ffffff;
+  border-top: 1px solid #e2e8f0;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.65rem;
 }
 
-.pagination-info {
+.pagination-text {
   font-size: 0.78rem;
-  color: #94a3b8;
+  color: #64748b;
 }
 
-.pagination-controls {
+.pagination-buttons {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
 }
 
-.page-numbers {
+.page-pills {
   display: flex;
-  gap: 0.25rem;
+  gap: 0.2rem;
 }
 
-.page-number-btn {
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #cbd5e1;
-  padding: 0.2rem 0.55rem;
+.page-pill {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  padding: 0.2rem 0.5rem;
   border-radius: 4px;
   font-size: 0.75rem;
   cursor: pointer;
 }
 
-.page-number-btn.active {
-  background: #2563eb;
+.page-pill.active {
+  background-color: #2563eb;
   border-color: #2563eb;
   color: #ffffff;
   font-weight: 600;
 }
 
-/* Modal Styling */
-.modal-backdrop {
+/* Modal */
+.modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(4px);
+  background-color: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 100;
-  padding: 1.5rem;
+  padding: 1rem;
 }
 
-.modal-card {
-  background: #111827;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 14px;
+.modal-box {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
   width: 100%;
-  max-width: 580px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+  max-width: 520px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
-.modal-header {
+.modal-box-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #e2e8f0;
 }
 
-.modal-title-group {
+.modal-title-wrap {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.5rem;
 }
 
-.modal-header h3 {
+.modal-title {
   margin: 0;
-  font-size: 1.1rem;
-  color: #ffffff;
+  font-size: 1.05rem;
+  color: #0f172a;
+  font-weight: 600;
 }
 
-.modal-subtitle {
+.modal-desc {
   margin: 0.2rem 0 0 0;
   font-size: 0.78rem;
-  color: #94a3b8;
+  color: #64748b;
 }
 
-.modal-close {
-  background: transparent;
+.modal-close-btn {
+  background: none;
   border: none;
-  font-size: 1.5rem;
+  font-size: 1.4rem;
   color: #94a3b8;
   cursor: pointer;
   line-height: 1;
 }
 
-.modal-close:hover {
-  color: #ffffff;
+.modal-close-btn:hover {
+  color: #0f172a;
 }
 
-.modal-body {
-  padding: 1.25rem 1.5rem;
+.modal-box-body {
+  padding: 1.15rem 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.85rem;
 }
 
-.meta-row {
+.modal-meta-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.meta-label {
-  font-size: 0.8rem;
-  color: #94a3b8;
-  margin-right: 0.4rem;
-}
-
-.meta-value {
-  font-size: 0.82rem;
-  color: #e2e8f0;
-  font-weight: 500;
-}
-
-.json-code-box {
-  background: #090d16;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  padding: 1rem;
-  max-height: 280px;
+.code-view {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.85rem;
+  max-height: 240px;
   overflow-y: auto;
 }
 
-.json-code-box pre {
+.code-view pre {
   margin: 0;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.8rem;
-  color: #38bdf8;
+  color: #0f172a;
 }
 
-.form-group {
+.form-row {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.35rem;
 }
 
 .form-label {
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   font-weight: 500;
-  color: #cbd5e1;
+  color: #334155;
 }
 
-.form-input {
-  background: #1e293b;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #f1f5f9;
-  padding: 0.55rem 0.75rem;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  outline: none;
-}
-
-.form-input:focus, .form-textarea:focus {
-  border-color: #3b82f6;
-}
-
-.form-textarea {
-  background: #1e293b;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #f1f5f9;
-  padding: 0.65rem 0.75rem;
-  border-radius: 6px;
-  font-size: 0.82rem;
-  outline: none;
-  resize: vertical;
-}
-
-.template-buttons {
+.template-chips {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.35rem;
   flex-wrap: wrap;
 }
 
-.modal-footer {
+.modal-box-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 0.65rem;
-  padding: 1rem 1.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(15, 23, 42, 0.3);
+  gap: 0.5rem;
+  padding: 0.85rem 1.25rem;
+  border-top: 1px solid #e2e8f0;
+  background-color: #f8fafc;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
 }
 
-/* Responsif Mobile & Layar Sentuh */
+/* Mobile Responsiveness */
 @media (max-width: 768px) {
-  .navbar {
-    padding: 0.85rem 1rem;
+  .nav-content {
     flex-direction: column;
     align-items: stretch;
-    gap: 0.85rem;
+    padding: 0.75rem 1rem;
   }
-  .navbar-left {
-    justify-content: flex-start;
-  }
-  .navbar-right {
+  .nav-actions {
     justify-content: space-between;
-    gap: 0.5rem;
   }
-  .status-indicators {
+  .status-group {
     width: 100%;
     justify-content: space-between;
   }
-  .main-content {
+  .page-body {
     padding: 1rem;
-    gap: 1.25rem;
+    gap: 1rem;
   }
-  .stats-grid {
+  .cards-grid {
     grid-template-columns: 1fr;
-    gap: 0.85rem;
   }
-  .section-toolbar {
+  .panel-header {
     flex-direction: column;
     align-items: stretch;
-    gap: 0.75rem;
   }
-  .toolbar-controls {
+  .panel-actions {
     flex-direction: column;
     align-items: stretch;
-    gap: 0.75rem;
   }
-  .search-form {
+  .filter-form {
     width: 100%;
   }
-  .search-input-wrap {
+  .input-with-icon {
     flex: 1;
   }
-  .search-input {
+  .input-with-icon .form-input {
     width: 100%;
   }
-  .limit-select-wrap {
-    justify-content: space-between;
-  }
-  .data-table th, .data-table td {
-    padding: 0.75rem 0.85rem;
-  }
-  .pagination-bar {
+  .pagination-footer {
     flex-direction: column;
     align-items: stretch;
-    gap: 0.75rem;
   }
-  .pagination-controls {
+  .pagination-buttons {
     justify-content: space-between;
-    width: 100%;
   }
-  .modal-card {
+  .modal-box {
     max-width: 95vw;
   }
 }
